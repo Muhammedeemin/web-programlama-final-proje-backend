@@ -141,17 +141,17 @@ module.exports = {
       }
     ];
 
-    // Her bölüm için upsert (varsa güncelle, yoksa ekle) - MySQL syntax
+    // PostgreSQL uyumlu upsert (id benzersiz)
     for (const dept of departments) {
       await queryInterface.sequelize.query(`
-        INSERT INTO departments (id, name, code, description, isActive, createdAt, updatedAt)
+        INSERT INTO departments (id, name, code, description, "isActive", "createdAt", "updatedAt")
         VALUES (:id, :name, :code, :description, :isActive, :createdAt, :updatedAt)
-        ON DUPLICATE KEY UPDATE 
-          name = VALUES(name),
-          code = VALUES(code),
-          description = VALUES(description),
-          isActive = VALUES(isActive),
-          updatedAt = VALUES(updatedAt)
+        ON CONFLICT (id) DO UPDATE SET
+          name = EXCLUDED.name,
+          code = EXCLUDED.code,
+          description = EXCLUDED.description,
+          "isActive" = EXCLUDED."isActive",
+          "updatedAt" = EXCLUDED."updatedAt"
       `, {
         replacements: dept,
         type: Sequelize.QueryTypes.INSERT
