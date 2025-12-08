@@ -1,0 +1,66 @@
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const { sequelize } = require('./models');
+const errorHandler = require('./middleware/errorHandler');
+const routes = require('./routes');
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Middleware
+app.use(cors({
+  origin: process.env.FRONTEND_URL || 'http://localhost:3001',
+  credentials: true
+}));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Static files for profile pictures
+app.use('/uploads', express.static('uploads'));
+
+// Routes
+app.use('/api', routes);
+
+// Health check
+app.get('/health', (req, res) => {
+  res.json({ status: 'OK', message: 'Web Programlama Final Projesi API is running' });
+});
+
+// Error handler (must be last)
+app.use(errorHandler);
+
+// Database connection and server start - Main server initialization
+const startServer = async () => {
+  try {
+    await sequelize.authenticate();
+    console.log('✅ Database connection established successfully.');
+    
+    // Sync database in development
+    if (process.env.NODE_ENV === 'development') {
+      await sequelize.sync({ alter: true });
+      console.log('✅ Database models synchronized.');
+    }
+    
+    // Only start server if not in test environment
+    if (process.env.NODE_ENV !== 'test') {
+      app.listen(PORT, () => {
+        console.log(`🚀 Server is running on port ${PORT}`);
+        console.log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
+      });
+    }
+  } catch (error) {
+    console.error('❌ Unable to start server:', error);
+    if (process.env.NODE_ENV !== 'test') {
+      process.exit(1);
+    }
+  }
+};
+
+// Only start server if this file is run directly (not in tests)
+if (require.main === module) {
+  startServer();
+}
+
+module.exports = app;
+
