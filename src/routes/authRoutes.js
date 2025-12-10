@@ -210,32 +210,12 @@ router.put('/profile', authGuard, updateProfileValidation, validateRequest, asyn
 // @route   POST /api/auth/profile/picture
 // @desc    Upload profile picture
 // @access  Private
-router.post('/profile/picture', authGuard, (req, res, next) => {
-  upload.single('picture')(req, res, (err) => {
-    if (err) {
-      // Handle multer errors
-      if (err.code === 'LIMIT_FILE_SIZE') {
-        return res.status(400).json({
-          success: false,
-          error: 'Dosya boyutu 5MB\'dan küçük olmalıdır'
-        });
-      }
-      if (err.message && err.message.includes('Only image files')) {
-        return res.status(400).json({
-          success: false,
-          error: 'Sadece resim dosyaları (JPEG, JPG, PNG, GIF) yüklenebilir'
-        });
-      }
-      return next(err);
-    }
-    next();
-  });
-}, async (req, res, next) => {
+router.post('/profile/picture', authGuard, upload.single('picture'), async (req, res, next) => {
   try {
     if (!req.file) {
       return res.status(400).json({
         success: false,
-        error: 'Lütfen bir resim dosyası seçin'
+        error: 'Please upload a picture'
       });
     }
 
@@ -244,8 +224,7 @@ router.post('/profile/picture', authGuard, (req, res, next) => {
       success: true,
       message: 'Profile picture uploaded successfully',
       data: {
-        profilePicture: user.profilePicture, // Return filename only
-        profilePictureUrl: `/uploads/profile-pictures/${user.profilePicture}` // Full URL for convenience
+        profilePicture: `/uploads/profile-pictures/${user.profilePicture}`
       }
     });
   } catch (error) {

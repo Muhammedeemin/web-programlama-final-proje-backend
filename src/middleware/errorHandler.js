@@ -62,28 +62,6 @@ const errorHandler = (err, req, res, next) => {
     };
   }
 
-  // Multer errors
-  if (err.code === 'LIMIT_FILE_SIZE') {
-    error = {
-      statusCode: 400,
-      message: 'Dosya boyutu 5MB\'dan küçük olmalıdır'
-    };
-  }
-
-  if (err.code === 'LIMIT_UNEXPECTED_FILE') {
-    error = {
-      statusCode: 400,
-      message: 'Beklenmeyen dosya alanı'
-    };
-  }
-
-  if (err.message && err.message.includes('Only image files')) {
-    error = {
-      statusCode: 400,
-      message: 'Sadece resim dosyaları (JPEG, JPG, PNG, GIF) yüklenebilir'
-    };
-  }
-
   res.status(error.statusCode || 500).json({
     success: false,
     error: error.message || 'Server Error',
