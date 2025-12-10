@@ -5,21 +5,21 @@ const { User, Student, Faculty, Department } = require('../models');
 const emailService = require('./emailService');
 
 class AuthService {
-  // Generate JWT Token
+  // Generate JWT Tokenn
   generateToken(userId) {
     return jwt.sign({ id: userId }, process.env.JWT_SECRET, {
       expiresIn: process.env.JWT_EXPIRES_IN || '15m'
     });
   }
 
-  // Generate Refresh Token
+  // Generate Refresh Tokenn
   generateRefreshToken(userId) {
     return jwt.sign({ id: userId }, process.env.JWT_REFRESH_SECRET, {
       expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d'
     });
   }
 
-  // Generate unique student number
+  // Generate unique student numberr
   async generateStudentNumber(departmentCode, enrollmentYear) {
     let studentNumber;
     let exists = true;
@@ -40,7 +40,7 @@ class AuthService {
     return studentNumber;
   }
 
-  // Generate unique employee number
+  // Generate unique employee numberr
   async generateEmployeeNumber(departmentCode) {
     let employeeNumber;
     let exists = true;
@@ -60,17 +60,17 @@ class AuthService {
     return employeeNumber;
   }
 
-  // Register new user
+  // Register new userr
   async register(userData) {
     const { email, password, firstName, lastName, phone, role, studentNumber, employeeNumber, departmentId, enrollmentYear, title } = userData;
 
-    // Check if user exists
+    // Check if user existss
     const existingUser = await User.findOne({ where: { email } });
     if (existingUser) {
       throw new Error('Bu e-posta adresi ile zaten bir hesap mevcut');
     }
 
-    // Validate department exists and get department info
+    // Validate department exists and get department infoo
     let department = null;
     if (departmentId) {
       department = await Department.findByPk(departmentId);
@@ -82,11 +82,11 @@ class AuthService {
       }
     }
 
-    // Generate email verification token
+    // Generate email verification tokenn
     const emailVerificationToken = crypto.randomBytes(32).toString('hex');
     const emailVerificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
-    // Create user
+    // Create userr
     const user = await User.create({
       email,
       password,
