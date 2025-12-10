@@ -332,7 +332,12 @@ class AuthService {
 
   // Update profile
   async updateProfile(userId, updateData) {
-    const user = await User.findByPk(userId);
+    const user = await User.findByPk(userId, {
+      include: [
+        { model: Student, as: 'studentProfile', include: [{ model: Department, as: 'department' }] },
+        { model: Faculty, as: 'facultyProfile', include: [{ model: Department, as: 'department' }] }
+      ]
+    });
     if (!user) {
       throw new Error('User not found');
     }
@@ -345,7 +350,14 @@ class AuthService {
     });
 
     await user.save();
-    return user;
+    
+    // Reload with relationships to ensure we return complete data
+    return await User.findByPk(userId, {
+      include: [
+        { model: Student, as: 'studentProfile', include: [{ model: Department, as: 'department' }] },
+        { model: Faculty, as: 'facultyProfile', include: [{ model: Department, as: 'department' }] }
+      ]
+    });
   }
 
   // Update profile picture
