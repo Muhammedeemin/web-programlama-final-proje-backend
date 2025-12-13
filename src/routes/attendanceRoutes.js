@@ -36,7 +36,7 @@ router.post(
         }, {
           model: require('../models').Course,
           as: 'course',
-          attributes: ['id', 'code', 'name']
+          attributes: ['id', 'code', 'name', 'departmentId']
         }]
       });
 
@@ -47,12 +47,31 @@ router.post(
         });
       }
 
-      // Check if user is the instructor (for faculty)
-      if (req.user.role === 'faculty' && section.instructorId !== instructorId) {
-        return res.status(403).json({
-          success: false,
-          error: 'You are not authorized to create sessions for this section'
-        });
+      // Check authorization: Faculty can create sessions for sections in their department
+      if (req.user.role === 'faculty') {
+        // If not the instructor, check if section's course belongs to faculty's department
+        if (section.instructorId !== instructorId) {
+          const { Faculty } = require('../models');
+          const facultyProfile = await Faculty.findOne({
+            where: { userId: instructorId },
+            attributes: ['departmentId']
+          });
+
+          if (!facultyProfile) {
+            return res.status(403).json({
+              success: false,
+              error: 'Faculty profile not found'
+            });
+          }
+
+          // Check if section's course belongs to faculty's department
+          if (!section.course || section.course.departmentId !== facultyProfile.departmentId) {
+            return res.status(403).json({
+              success: false,
+              error: 'You are not authorized to create sessions for this section. You can only create sessions for sections in your department.'
+            });
+          }
+        }
       }
 
       if (!section.classroom) {
