@@ -97,6 +97,51 @@ router.post(
         }]
       });
 
+      // Notify enrolled students about the new session (async, non-blocking)
+      const { Enrollment } = require('../models');
+      Enrollment.findAll({
+        where: {
+          sectionId: sectionId,
+          status: 'enrolled'
+        },
+        include: [{
+          model: User,
+          as: 'student',
+          attributes: ['id', 'email', 'firstName', 'lastName']
+        }]
+      }).then(async (enrollments) => {
+        const emailService = require('../services/emailService');
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
+        const sessionUrl = `${frontendUrl}/attendance/give/${session.id}`;
+
+        for (const enrollment of enrollments) {
+          try {
+            const subject = `📅 Attendance Session Started: ${section.course.code}`;
+            const message = `
+              <h2>Attendance Session Started</h2>
+              <p>Dear ${enrollment.student.firstName} ${enrollment.student.lastName},</p>
+              <p>An attendance session has been started for <strong>${section.course.code} - ${section.course.name}</strong>.</p>
+              <p><strong>Date:</strong> ${date}</p>
+              <p><strong>Time:</strong> ${startTime} - ${endTime}</p>
+              <p><strong>Location:</strong> ${section.classroom.building} ${section.classroom.roomNumber}</p>
+              <div style="text-align: center; margin: 30px 0;">
+                <a href="${sessionUrl}" style="display: inline-block; padding: 14px 28px; background-color: #0ea5e9; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">
+                  Give Attendance
+                </a>
+              </div>
+              <p>Please give your attendance using the link above or through the "My Attendance" page.</p>
+              <p>Best regards,<br>Akıllı Kampüs Yönetim Platformu</p>
+            `;
+            await emailService.sendEmail(enrollment.student.email, subject, message);
+            console.log(`✅ Notification sent to ${enrollment.student.email}`);
+          } catch (error) {
+            console.error(`❌ Failed to send notification to ${enrollment.student.email}:`, error.message);
+          }
+        }
+      }).catch(err => {
+        console.error('⚠️ Error notifying students:', err.message);
+      });
+
       res.status(201).json({
         success: true,
         message: 'Attendance session created successfully',
@@ -309,12 +354,101 @@ router.post(
   }
 );
 
+// Get active sessions for student (Student only)
+router.get(
+  '/sessions/active',
+  authGuard,
+  roleGuard('student'),
+  async (req, res) => {
+    try {
+      const studentId = req.user.id;
+      const { Enrollment } = require('../models');
+
+      // Get all enrollments for the student
+      const enrollments = await Enrollment.findAll({
+        where: {
+          studentId,
+          status: 'enrolled'
+        },
+        include: [{
+          model: CourseSection,
+          as: 'section',
+          attributes: ['id']
+        }]
+      });
+
+      const sectionIds = enrollments.map(e => e.sectionId);
+
+      if (sectionIds.length === 0) {
+        return res.json({
+          success: true,
+          data: []
+        });
+      }
+
+      // Get active sessions for these sections
+      const activeSessions = await AttendanceSession.findAll({
+        where: {
+          sectionId: { [Op.in]: sectionIds },
+          status: 'active',
+          date: new Date().toISOString().split('T')[0] // Today's sessions
+        },
+        include: [{
+          model: CourseSection,
+          as: 'section',
+          include: [{
+            model: require('../models').Course,
+            as: 'course',
+            attributes: ['id', 'code', 'name']
+          }, {
+            model: require('../models').Classroom,
+            as: 'classroom',
+            attributes: ['id', 'building', 'roomNumber']
+          }]
+        }, {
+          model: User,
+          as: 'instructor',
+          attributes: ['id', 'firstName', 'lastName']
+        }],
+        order: [['startTime', 'ASC']]
+      });
+
+      // Check which sessions the student has already checked in
+      const sessionIds = activeSessions.map(s => s.id);
+      const checkedInRecords = await AttendanceRecord.findAll({
+        where: {
+          sessionId: { [Op.in]: sessionIds },
+          studentId
+        },
+        attributes: ['sessionId']
+      });
+      const checkedInSessionIds = new Set(checkedInRecords.map(r => r.sessionId));
+
+      // Add checked-in status to each session
+      const sessionsWithStatus = activeSessions.map(session => ({
+        ...session.toJSON(),
+        hasCheckedIn: checkedInSessionIds.has(session.id)
+      }));
+
+      res.json({
+        success: true,
+        data: sessionsWithStatus
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  }
+);
+
 // Get my attendance (Student only)
 router.get(
   '/my-attendance',
   authGuard,
   roleGuard('student'),
-  async (req, res) => {
+async (req, res) => {
     try {
       const studentId = req.user.id;
       const { sectionId } = req.query;

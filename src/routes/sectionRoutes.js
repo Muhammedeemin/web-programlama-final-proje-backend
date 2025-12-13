@@ -10,6 +10,7 @@ const { Op } = require('sequelize');
 // Get all sections (with filtering)
 router.get(
   '/',
+  authGuard,
   [
     query('semester').optional().isIn(['fall', 'spring', 'summer']).withMessage('Invalid semester'),
     query('year').optional().isInt({ min: 2020, max: 2100 }).withMessage('Invalid year'),
@@ -20,10 +21,47 @@ router.get(
   async (req, res) => {
     try {
       const whereClause = { isActive: true };
+      const courseWhereClause = {};
+      
       if (req.query.semester) whereClause.semester = req.query.semester;
       if (req.query.year) whereClause.year = parseInt(req.query.year);
       if (req.query.instructorId) whereClause.instructorId = req.query.instructorId;
       if (req.query.courseId) whereClause.courseId = req.query.courseId;
+      
+      // If faculty user, filter by their department
+      if (req.user && req.user.role === 'faculty' && !req.query.instructorId) {
+        const { Faculty } = require('../models');
+        const facultyProfile = await Faculty.findOne({
+          where: { userId: req.user.id },
+          attributes: ['departmentId']
+        });
+        
+        if (facultyProfile) {
+          // Get sections where instructor is this faculty OR course belongs to their department
+          // First, get courses from their department
+          const departmentCourses = await Course.findAll({
+            where: { departmentId: facultyProfile.departmentId, isActive: true },
+            attributes: ['id']
+          });
+          const departmentCourseIds = departmentCourses.map(c => c.id);
+          
+          // Show sections where:
+          // 1. Instructor is this faculty, OR
+          // 2. Course belongs to their department (even if instructor is different - for viewing)
+          if (departmentCourseIds.length > 0) {
+            whereClause[Op.or] = [
+              { instructorId: req.user.id },
+              { courseId: { [Op.in]: departmentCourseIds } }
+            ];
+          } else {
+            // If no courses in department, only show sections where they are instructor
+            whereClause.instructorId = req.user.id;
+          }
+        } else {
+          // If no faculty profile, only show sections where they are instructor
+          whereClause.instructorId = req.user.id;
+        }
+      }
 
       const sections = await CourseSection.findAll({
         where: whereClause,
@@ -31,7 +69,8 @@ router.get(
           {
             model: Course,
             as: 'course',
-            attributes: ['id', 'code', 'name']
+            attributes: ['id', 'code', 'name'],
+            where: courseWhereClause
           },
           {
             model: User,
